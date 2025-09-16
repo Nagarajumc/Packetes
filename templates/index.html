@@ -1,0 +1,80 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Network Packets Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.min.js"></script>
+  </head>
+  <body>
+    <h1>Network Packets Dashboard</h1>
+    <div>
+      <p>Total Packets: <span id="total_packets">0</span></p>
+      <p>Packets/sec (last 10s): <span id="pps">0</span></p>
+    </div>
+    <canvas id="protocolChart" width="400" height="200"></canvas>
+    <h2>Top Source IPs</h2>
+    <ul id="top_src"></ul>
+    <h2>Recent Packets</h2>
+    <table border="1">
+      <thead><tr><th>Time</th><th>Src</th><th>Dst</th><th>Proto</th><th>Size</th></tr></thead>
+      <tbody id="recent_table"></tbody>
+    </table>
+
+    <script>
+      const socket = io();
+
+      const protocolCtx = document.getElementById('protocolChart').getContext('2d');
+      const protocolChart = new Chart(protocolCtx, {
+        type: 'pie',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Protocol Distribution',
+            data: [],
+            backgroundColor: [
+              'rgb(255,99,132)',
+              'rgb(54,162,235)',
+              'rgb(255,206,86)',
+              'rgb(75,192,192)',
+              'rgb(153,102,255)',
+              'rgb(255,159,64)',
+              'rgb(100,100,100)'
+            ]
+          }]
+        },
+        options: {}
+      });
+
+      socket.on('stats', function (data) {
+        document.getElementById('total_packets').innerText = data.total_packets;
+        document.getElementById('pps').innerText = data.packets_per_sec.toFixed(2);
+
+        // protocol chart
+        const labels = Object.keys(data.protocol_counts);
+        const counts = Object.values(data.protocol_counts);
+        protocolChart.data.labels = labels;
+        protocolChart.data.datasets[0].data = counts;
+        protocolChart.update();
+
+        // top source IPs
+        const ul = document.getElementById('top_src');
+        ul.innerHTML = '';
+        data.top_src_ips.forEach(([ip, c]) => {
+          const li = document.createElement('li');
+          li.innerText = `${ip}: ${c}`;
+          ul.appendChild(li);
+        });
+
+        // recent table
+        const tbl = document.getElementById('recent_table');
+        tbl.innerHTML = '';
+        data.recent.forEach(pkt => {
+          const tr = document.createElement('tr');
+          const ts = new Date(pkt.timestamp * 1000).toLocaleTimeString();
+          tr.innerHTML = `<td>${ts}</td><td>${pkt.src}</td><td>${pkt.dst}</td><td>${pkt.protocol}</td><td>${pkt.size}</td>`;
+          tbl.appendChild(tr);
+        });
+      });
+    </script>
+  </body>
+</html>
